@@ -14,7 +14,7 @@ LIBRARYNAME = JSWriter
 # from the plugin.
 ifneq ($(REQUIRES_RTTI), 1)
 ifneq ($(REQUIRES_EH), 1)
-EXPORTED_SYMBOL_FILE = $(CWD)/JSWriter.exports
+EXPORTED_SYMBOL_FILE = JSWriter.exports
 endif
 endif
 
