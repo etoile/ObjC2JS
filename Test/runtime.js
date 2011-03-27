@@ -53,7 +53,8 @@ function pointerCastTo(obj, integer, signed, size)
 	return typedBuffer;
 }
 
-function objc_msgSend(object, selector) {
+function objc_msgSend(object, selector)
+{
 	if (!object) return null;
 	var method = object.isa.methods[selector];
 	if (method)
@@ -68,10 +69,13 @@ function objc_msgSend(object, selector) {
 		// FIXME: Make the third argument an NSInvocation, not an array
 		return object.isa.methods.forwardInvocation(object, "forwardInvocation", arguments);
 	}
+	// TODO: Other lookup failure mechanisms (Cocoa allows classes to add a
+	// method when a missing one is required.
 	// FIXME: throw some kind of exception
 }
 
-function objc_msgSendSuper(isClassMsg, cls, object, selector) {
+function objc_msgSendSuper(isClassMsg, cls, object, selector)
+{
 	var method;
 	if (isClassMsg)
 	{

@@ -380,7 +380,13 @@ public:
     }
     OS << '(';
     for (CallExpr::arg_iterator i=E->arg_begin(),e=E->arg_end() ; i!=e ; ++i) {
-      TraverseStmt(*i);
+      if ((*i)->getType()->isStructureType()){
+        OS << "cloneObject(";
+        TraverseStmt(*i);
+        OS << ")";
+      } else {
+        TraverseStmt(*i);
+      }
       if (i+1 != e)
         OS << ", ";
     }

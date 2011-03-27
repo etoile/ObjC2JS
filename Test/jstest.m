@@ -29,6 +29,10 @@ void takesPointer(struct s*v)
 {
 	v->s = "Correctly set";
 }
+void takesCopy(struct s v)
+{
+	v.s = "Incorrectly set";
+}
 
 #define FOO(x) do { x; } while(0)
 
@@ -62,5 +66,6 @@ int main(int b, char**argv)
 	int array2[12];
 	int element = array2[1];
 	takesPointer(&structVar);
+	takesCopy(structVar);
 	jsalert(structVar.s);
 }
