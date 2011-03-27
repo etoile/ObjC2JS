@@ -54,4 +54,5 @@ int main(int b, char**argv)
 	struct s structVarNoInit;
 	struct s structVar = { .b = 1,.a= 2, .s ="C string", .obj = @"ObjC String"};
 	int array2[12];
+	int element = array2[1];
 }

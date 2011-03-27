@@ -56,18 +56,50 @@ public:
     TraverseStmt(D->getBody());
     return true;
   }
+  const char *ArrayBufferViewForType(QualType Ty) {
+    if (Ty->isIntegerType()) {
+      if (Ty->isUnsignedIntegerType()) {
+        switch (Ctx->getTypeSize(Ty))
+        {
+          case 8: return "Uint8Array";
+          case 16: return "Uint16Array";
+          case 32: return "Uint32Array";
+          case 64: //FIXME: Emit error, no 64-bit int types in JS
+          default: return 0;
+        }
+      } else {
+        switch (Ctx->getTypeSize(Ty))
+        {
+          case 8: return "Int8Array";
+          case 16: return "Int16Array";
+          case 32: return "Int32Array";
+          case 64: //FIXME: Emit error, no 64-bit int types in JS
+          default: return 0;
+        }
+      }
+    } else if (Ty->isFloatingType()) {
+        switch (Ctx->getTypeSize(Ty))
+        {
+          case 32: return "Float32Array";
+          case 64: return "Float64Array";
+          default: return 0;
+        }
+    }
+    return 0;
+  }
   bool TraverseDeclStmt(DeclStmt *D) {
     OS << "var ";
     for (DeclStmt::decl_iterator i=D->decl_begin(),e=D->decl_end() ; i!=e ; ++i){
       VarDecl *VD = cast<VarDecl>(*i);
+      QualType Ty = VD->getType();
       OS << VD->getName();
-      if (VD->getType()->isStructureType()) {
+      if (Ty->isStructureType()) {
         OS << " = ";
         if (Stmt *init = VD->getInit()) {
           TraverseStmt(init);
         } else {
           OS << "{";
-          const RecordType *RT = VD->getType()->getAsStructureType();
+          const RecordType *RT = Ty->getAsStructureType();
           const RecordDecl *RD = RT->getDecl();
           bool comma = false;
 
@@ -80,8 +112,24 @@ public:
           }
           OS << "}";
         }
-      } else if (VD->getType()->isArrayType()) {
-        
+      } else if (Ty->isArrayType()) {
+        const ArrayType *ArrayTy = Ctx->getAsArrayType(Ty);
+        QualType ElementTy = ArrayTy->getElementType();
+        OS << " = ";
+        if (Ty->isConstantArrayType()) {
+          if (ElementTy->isArithmeticType()) {
+            OS << "new " << ArrayBufferViewForType(ElementTy) << '(';
+            if (Stmt *init = VD->getInit()) {
+              TraverseStmt(init);
+            } else {
+              OS << (Ctx->getTypeSize(Ty) /
+                  Ctx->getTypeSize(ArrayTy->getElementType()));
+            }
+            OS << ')';
+            return true;
+          }
+        }
+        OS << "new Array()";
       } else if (Stmt *init = VD->getInit()) {
         OS << " = ";
         TraverseStmt(init);

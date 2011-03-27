@@ -31,8 +31,8 @@ function pointerCastTo(obj, integer, signed, size)
 			switch (size)
 			{
 				case 8:  typedBuffer = Int8Array(buffer);
-				case 16:  typedBuffer = Int8Array(buffer);
-				case 32:  typedBuffer = Int8Array(buffer);
+				case 16:  typedBuffer = Int16Array(buffer);
+				case 32:  typedBuffer = Int32Array(buffer);
 			}
 		}
 		else
@@ -40,8 +40,8 @@ function pointerCastTo(obj, integer, signed, size)
 			switch (size)
 			{
 				case 8:  typedBuffer = Uint8Array(buffer);
-				case 16:  typedBuffer = Uint8Array(buffer);
-				case 32:  typedBuffer = Uint8Array(buffer);
+				case 16:  typedBuffer = Uint16Array(buffer);
+				case 32:  typedBuffer = Uint32Array(buffer);
 			}
 		}
 	}
@@ -53,7 +53,7 @@ function pointerCastTo(obj, integer, signed, size)
 		}
 		else
 		{
-			typedBuffer = Float32Array(buffer);
+			typedBuffer = Float64Array(buffer);
 		}
 	}
 	typedBuffer.buffer = buffer;
