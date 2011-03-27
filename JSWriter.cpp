@@ -432,6 +432,77 @@ public:
     }
     return true;
   }
+  const char* OpForAssignOp(BinaryOperatorKind Op) {
+    switch (Op) {
+      case BO_AddAssign: return "+";
+      case BO_AndAssign: return "&";
+      case BO_DivAssign: return "/";
+      case BO_OrAssign: return "|";
+      case BO_RemAssign: return "%";
+      case BO_ShlAssign: return "<<";
+      case BO_ShrAssign: return ">>";
+      case BO_SubAssign: return "-";
+      case BO_XorAssign: return "^";
+      default: return "?";
+    }
+  }
+  bool TraverseCompoundAssignOperator(CompoundAssignOperator *Op) {
+    fprintf(stderr, "Visiting compound assign\n");
+    // FIXME: This is probably wrong, because we might be evaluating side
+    // effects twice
+    Expr *LHS = Op->getLHS();
+    Expr *RHS = Op->getRHS();
+    if (ObjCPropertyRefExpr *E = dyn_cast<ObjCPropertyRefExpr>(LHS)) {
+      OS << "objc_msgSend(";
+      TraverseStmt(E->getBase());
+      OS << ", \"" << E->getSetterSelector().getAsString() << "\", ";
+      OS << "objc_msgSend(";
+      TraverseStmt(E->getBase());
+      OS << ", \"" << E->getGetterSelector().getAsString() << "\")";
+      OS << OpForAssignOp(Op->getOpcode());
+      TraverseStmt(RHS);
+      OS << ')';
+    } else {
+      TraverseStmt(LHS);
+      OS << Op->getOpcodeStr();
+      TraverseStmt(RHS);
+    }
+    return true;
+  }
+  bool TraverseBinAndAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinAddAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinDivAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinOrAddAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinRemAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinShlAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinShrAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinSubAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+  bool TraverseBinXorAssign(CompoundAssignOperator *Op) {
+    return TraverseCompoundAssignOperator(Op);
+  }
+
+  bool TraverseObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {
+    OS << "objc_msgSend(";
+    TraverseStmt(E->getBase());
+    OS << ", \"" << E->getGetterSelector().getAsString() << "\")";
+    return true;
+  }
   bool VisitObjCImplDecl(ObjCImplDecl *D) {
     OS << "OBJC." << D->getName() << " = new ObjCClass(\"" << D->getName() << "\", ";
     if (ObjCInterfaceDecl *Super = D->getClassInterface()->getSuperClass())
