@@ -8,13 +8,6 @@ function cloneObject(obj)
 	return new clone();
 }
 
-C.NSAllocateObject = function(cls) {
-	return cloneObject(cls.template);
-};
-C.NSDeallocateObject = function(obj) {}
-
-C.malloc = function(size) { return new ArrayBuffer(size); }
-C.calloc = function(size, n) { return new ArrayBuffer(size * n); }
 
 function pointerCastTo(obj, integer, signed, size)
 {
@@ -121,6 +114,16 @@ function ObjCClass(name, superclassName)
 	this.isa = new Object();
 	objc_initClass(this.isa, superClass ? superClass.isa : null, name);
 }
+
+C.NSAllocateObject = function(cls) {
+	return cloneObject(cls.template);
+};
+C.NSDeallocateObject = function(obj) {}
+
+C.malloc = function(size) { return new ArrayBuffer(size); }
+C.calloc = function(size, n) { return new ArrayBuffer(size * n); }
+C.jsalert = function(x) { alert(x); };
+
 
 OBJC.NSObject = new ObjCClass("NSObject", null)
 // NSObject class methods

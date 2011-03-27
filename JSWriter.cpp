@@ -225,6 +225,17 @@ public:
   bool TraverseUnaryNot(UnaryOperator *Op) { return TraversePrefixOp(Op); }
   bool TraverseUnaryLNot(UnaryOperator *Op) { return TraversePrefixOp(Op); }
 
+  /**
+   * Take the address of an object by creating an array containing that object.
+   * Modifications to the object will then modify the original object.  
+   */
+  bool TraverseUnaryAddrOf(UnaryOperator *Op) {
+    OS << "new Array(";
+    TraverseStmt(Op->getSubExpr());
+    OS << ')';
+    return true;
+  }
+
   bool TypesEquivalent(QualType a, QualType b) {
     if (Ctx->hasSameUnqualifiedType(a, b))
       return true;
@@ -447,7 +458,6 @@ public:
     }
   }
   bool TraverseCompoundAssignOperator(CompoundAssignOperator *Op) {
-    fprintf(stderr, "Visiting compound assign\n");
     // FIXME: This is probably wrong, because we might be evaluating side
     // effects twice
     Expr *LHS = Op->getLHS();
@@ -495,6 +505,17 @@ public:
   }
   bool TraverseBinXorAssign(CompoundAssignOperator *Op) {
     return TraverseCompoundAssignOperator(Op);
+  }
+
+  bool TraverseMemberExpr(MemberExpr *E) {
+    TraverseStmt(E->getBase());
+    // If this is an arrow operation, then it's a pointer in C, so an array in
+    // JavaScript.  We get the first element in the array to get the real
+    // object.
+    if (E->isArrow())
+      OS << "[0]";
+    OS << '.' << E->getMemberDecl()->getName();
+    return true;
   }
 
   bool TraverseObjCPropertyRefExpr(ObjCPropertyRefExpr *E) {

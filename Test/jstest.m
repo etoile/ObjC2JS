@@ -1,4 +1,5 @@
 void *malloc(unsigned int);
+void jsalert(const char*);
 
 @interface NSObject
 +alloc;
@@ -23,6 +24,11 @@ struct s
 	const char *s;
 	id obj;
 };
+
+void takesPointer(struct s*v)
+{
+	v->s = "Correctly set";
+}
 
 #define FOO(x) do { x; } while(0)
 
@@ -55,4 +61,6 @@ int main(int b, char**argv)
 	struct s structVar = { .b = 1,.a= 2, .s ="C string", .obj = @"ObjC String"};
 	int array2[12];
 	int element = array2[1];
+	takesPointer(&structVar);
+	jsalert(structVar.s);
 }
