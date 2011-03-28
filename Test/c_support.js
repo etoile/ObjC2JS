@@ -71,6 +71,7 @@ function makeCString(str)
 function makeObjCString(str)
 {
 	str.isa = OBJC.NSConstantString;
+	return str;
 }
 
 C.malloc = function(size) { return new ArrayBuffer(size); }
