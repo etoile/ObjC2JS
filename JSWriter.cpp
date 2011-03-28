@@ -159,16 +159,17 @@ public:
     OS << " }";
     return true;
   }
-  /**
-   * Emit a string literal as a JavaScript string literal.
-   *
-   * This collects all strings - C strings and Objective-C strings - because
-   * Objective-C string literals have a string literal as a child.
-   */
+
   bool VisitStringLiteral(StringLiteral *SL) {
-    OS << '"' << SL->getString() << '"';
+    OS << "makeCString(\"" << SL->getString() << "\")";
     return true;
   }
+  bool TraverseObjCStringLiteral(ObjCStringLiteral *L) {
+    StringLiteral *SL = L->getString();
+    OS << "makeObjCString(\"" << SL->getString() << "\")";
+    return true;
+  }
+
   bool VisitIntegerLiteral(IntegerLiteral *IL) {
     OS << IL->getValue();
     return true;
