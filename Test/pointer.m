@@ -12,6 +12,7 @@ int main(void)
 	alias[2] = 1;
 	array[1] = alias[2];
 	((id*)array)[12] = [NSObject new];
+	jsalert(sizeof(array));
 	jsalert(array[1]);
 	jsalert(array[2]);
 	jsalert(array[12]);

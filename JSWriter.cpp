@@ -357,6 +357,14 @@ public:
     return true;
   }
 
+  bool TraverseUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *E) {
+    // FIXME: VLA sizes
+    Expr::EvalResult Result;
+    E->Evaluate(Result, *Ctx);
+    OS << Result.Val.getInt();;
+    return true;
+  }
+
   bool TraverseCompoundStmt(CompoundStmt *S) {
     OS <<"{\n";
     for (CompoundStmt::body_iterator i=S->body_begin(),e=S->body_end() ; i!=e ;
