@@ -34,27 +34,32 @@ The [Objective-]C type system doesn't really play nicely with the JavaScript,
 but the compiler and runtime try to work around this, performing the following
 mappings:
 
-- C structures are mapped to JavaScript objects, so can be referenced by name
-  in any context.  Casts of pointers to C structures are effectively null
-  operations in JavaScript, so you can cast a structure pointer to another that
-  has the same fields, but not to one that has an equivalent layout but
-  different field names.  Eventually, this restriction can be eliminated by
-  providing order in which the two structure fields are defined to a cast function.
+- C primitive types are represented by JavaScript primitives.  All C number
+  types are JavaScript numbers, which are double-precision floating-point
+  values.  Cast operations are implemented by truncating the value to fit in
+  the destination type.
 
-- Pointers to C primitive value types (int, float, double, and so on) are
-  implemented using the WebGL array extensions.  A void* pointer is a
-  JavaScript ArrayBuffer, which is a class wrapping a block of untyped memory.
-  Pointer arithmetic generates new ArrayBufferView, giving a different view of
-  the same memory.  When you cast to a concrete pointer type, such as int*, you
-  get TypedArray, which allows the memory to be interpreted as an array of
-  primitive types.  **NOTE:** Casting pointer to complex types (structures or
-  arrays, or Objective-C objects) is not supported.
+- C structured types are implemented using WebGL ArrayBuffer objects.  If you
+  allocate a structure or an array, you get an ArrayBuffer.
 
-- All pointers are represented by arrays (either ArrayBuffers or Arrays
-  depending on how they were constructed).  This allows, for example, functions
-  that return values via pointers, because the array object will be aliased by
-  the caller and the callee and the caller can simply extract the element that
-  is inserted.
+- Pointers are implemented as AddressOf objects.  These implement pointer
+  arithmetic and dereferencing.  When you take the address of an object, you
+  get a new AddressOf object, whose pointee field is set to the object whose
+  address you took.  The result of a pointer arithmetic expression is a new
+  AddressOf object, as long as the pointee is a valid address
+
+- Casting pointers to integers gives a unique 32-bit integer value.  There is
+  no mechanism for casting integers to pointers, and it is not possible to
+  implement one without JavaScript gaining support for weak references.
+
+- If you attempt to store a pointer in memory buffer (i.e. a C array or
+  structure), then the underlying buffer object has the pointer stored as a
+  property and the integer value written into the buffer at that address.  This
+  allows you to store a pointer in a structure or union (for example) and then
+  access its value as an integer.  If you attempt to cast from this integer
+  back to a pointer, then you get undefined behaviour.  If you simply
+  dereference the pointer as a pointer type, however, then you will load back
+  the pointer value stored in the buffer.
 
 - Objective-C objects are JavaScript objects, with an isa field set to a class.
   The classes are all added to a global OBJC object, allowing class lookup to

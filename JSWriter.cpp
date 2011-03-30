@@ -16,6 +16,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/AST.h"
+#include "clang/AST/RecordLayout.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -56,23 +57,23 @@ public:
     TraverseStmt(D->getBody());
     return true;
   }
-  const char *ArrayBufferViewForType(QualType Ty) {
+  const char *JSPrimitiveForType(QualType Ty) {
     if (Ty->isIntegerType()) {
       if (Ty->isUnsignedIntegerType()) {
         switch (Ctx->getTypeSize(Ty))
         {
-          case 8: return "Uint8Array";
-          case 16: return "Uint16Array";
-          case 32: return "Uint32Array";
+          case 8: return "Uint8";
+          case 16: return "Uint16";
+          case 32: return "Uint32";
           case 64: //FIXME: Emit error, no 64-bit int types in JS
           default: return 0;
         }
       } else {
         switch (Ctx->getTypeSize(Ty))
         {
-          case 8: return "Int8Array";
-          case 16: return "Int16Array";
-          case 32: return "Int32Array";
+          case 8: return "Int8";
+          case 16: return "Int16";
+          case 32: return "Int32";
           case 64: //FIXME: Emit error, no 64-bit int types in JS
           default: return 0;
         }
@@ -80,83 +81,76 @@ public:
     } else if (Ty->isFloatingType()) {
         switch (Ctx->getTypeSize(Ty))
         {
-          case 32: return "Float32Array";
-          case 64: return "Float64Array";
+          case 32: return "Float32";
+          case 64: return "Float64";
           default: return 0;
         }
+    } else if (Ty->isAnyPointerType()) {
+      return "Pointer";
     }
     return 0;
+  }
+  void EmitVarDecl(VarDecl *VD) {
+    QualType Ty = VD->getType();
+    OS << VD->getName();
+    if (Stmt *init = VD->getInit()) {
+      OS << " = ";
+      TraverseStmt(init);
+      // If it's a composite type, we need to create some memory to store it.
+      // If there's an init list then this is done when emitting the code for
+      // that
+    } else if (Ty->isStructureType() || Ty->isArrayType()) {
+      OS << " = new ArrayBuffer(" << Ctx->getTypeSize(Ty) / 8 << ')';
+    }
+
+  }
+  bool TraverseVarDecl(VarDecl *VD) {
+    OS << "var ";
+    EmitVarDecl(VD);
+    OS << ";\n";
+    return true;
   }
   bool TraverseDeclStmt(DeclStmt *D) {
     OS << "var ";
     for (DeclStmt::decl_iterator i=D->decl_begin(),e=D->decl_end() ; i!=e ; ++i){
-      VarDecl *VD = cast<VarDecl>(*i);
-      QualType Ty = VD->getType();
-      OS << VD->getName();
-      if (Ty->isStructureType()) {
-        OS << " = ";
-        if (Stmt *init = VD->getInit()) {
-          TraverseStmt(init);
-        } else {
-          OS << "{";
-          const RecordType *RT = Ty->getAsStructureType();
-          const RecordDecl *RD = RT->getDecl();
-          bool comma = false;
-
-          for (RecordDecl::field_iterator i=RD->field_begin(),e=RD->field_end()
-              ; i!=e ; ++i) {
-            if (comma)
-              OS << ", ";
-            comma = true;
-            OS << (*i)->getName() << ": 0";
-          }
-          OS << "}";
-        }
-      } else if (Ty->isArrayType()) {
-        const ArrayType *ArrayTy = Ctx->getAsArrayType(Ty);
-        QualType ElementTy = ArrayTy->getElementType();
-        OS << " = ";
-        if (Ty->isConstantArrayType()) {
-          if (ElementTy->isArithmeticType()) {
-            OS << "new " << ArrayBufferViewForType(ElementTy) << '(';
-            if (Stmt *init = VD->getInit()) {
-              TraverseStmt(init);
-            } else {
-              OS << (Ctx->getTypeSize(Ty) /
-                  Ctx->getTypeSize(ArrayTy->getElementType()));
-            }
-            OS << ')';
-            return true;
-          }
-        }
-        OS << "new Array()";
-      } else if (Stmt *init = VD->getInit()) {
-        OS << " = ";
-        TraverseStmt(init);
-      }
+      EmitVarDecl(cast<VarDecl>(*i));
       if (i+1 != e)
         OS << ", ";
     }
     return true;
   }
-  bool TraverseInitListExpr(InitListExpr *E) {
-    // This is almost certainly broken for array initialisers
+
+  void EmitInitList(InitListExpr *E, uint64_t baseOffset) {
     const RecordType *RT = cast<RecordType>(cast<ElaboratedType>(E->getType())->getNamedType());
     const RecordDecl *RD = RT->getDecl();
-    bool comma = false;
+    const ASTRecordLayout &Layout = Ctx->getASTRecordLayout(RD);
     Expr **Init = E->getInits();
-
-    OS << "{ ";
+    // This is almost certainly broken for array initialisers
     for (RecordDecl::field_iterator i=RD->field_begin(),e=RD->field_end()
         ; i!=e ; ++i) {
-      if (comma)
-        OS << ", ";
-      comma = true;
-      OS << (*i)->getName() << " : ";
-      TraverseStmt(*Init);
+      // TODO: Bitfields (yuck!)
+      uint64_t offset = baseOffset + Layout.getFieldOffset((*i)->getFieldIndex()) / 8;
+      QualType FieldTy = i->getType();
+      if (FieldTy->isArithmeticType()) {
+        OS << "$tmp.set" << JSPrimitiveForType(FieldTy) << '(' << offset <<  ", ";
+        TraverseStmt(*Init);
+        OS << ");";
+      } else if (FieldTy->isAnyPointerType()) {
+        OS << "$tmp.setPointer(" << offset <<  ", ";
+        TraverseStmt(*Init);
+        OS << ");";
+      } else if (InitListExpr *SubList = dyn_cast<InitListExpr>(*Init)) {
+        EmitInitList(SubList, offset);
+      }
       Init++;
     }
-    OS << " }";
+  }
+
+  bool TraverseInitListExpr(InitListExpr *E) {
+    OS << "(function () { var $tmp = new ArrayBuffer("
+       << Ctx->getTypeSize(E->getType()) / 8 << ");";
+    EmitInitList(E, 0);
+    OS << " return $tmp; })()";
     return true;
   }
 
@@ -178,10 +172,21 @@ public:
     OS << E->getDecl()->getName();
     return true;
   }
+  bool TraverseBinAssign(BinaryOperator *Op) {
+    if (isa<DeclRefExpr>(Op->getLHS()))
+      return TraverseBinOp(Op);
+    OS << '(';
+    TraverseStmt(Op->getLHS());
+    // FIXME: Structure assignments (memcpy call)
+    // Store the value at address 0 in the LHS.
+    OS << ").set" << JSPrimitiveForType(Op->getLHS()->getType()) << "(0, ";
+    TraverseStmt(Op->getRHS());
+    OS << ')';
+    return true;
+  }
   // These binary ops are the same in C and JS, so they can just be emitted as-is.
   bool TraverseBinAdd(BinaryOperator *Op) { return TraverseBinOp(Op); }
   bool TraverseBinAnd(BinaryOperator *Op) { return TraverseBinOp(Op); }
-  bool TraverseBinAssign(BinaryOperator *Op) { return TraverseBinOp(Op); }
   bool TraverseBinComma(BinaryOperator *Op) { return TraverseBinOp(Op); }
   // FIXME: add Math.abs() around integer division
   bool TraverseBinDiv(BinaryOperator *Op) { return TraverseBinOp(Op); }
@@ -231,9 +236,15 @@ public:
    * Modifications to the object will then modify the original object.  
    */
   bool TraverseUnaryAddrOf(UnaryOperator *Op) {
-    OS << "new Array(";
+    OS << "new AddressOf(";
     TraverseStmt(Op->getSubExpr());
     OS << ')';
+    return true;
+  }
+  bool TraverseUnary(UnaryOperator *Op) {
+    OS << '(';
+    TraverseStmt(Op->getSubExpr());
+    OS << ").dereference()";
     return true;
   }
 
@@ -253,6 +264,20 @@ public:
       default:
         TraverseStmt(Body);
         break;
+      case CK_ArrayToPointerDecay:
+        OS << "(new AddressOf(";
+        TraverseStmt(Body);
+        OS << "))";
+        break;
+      case CK_LValueToRValue:
+        TraverseStmt(Body);
+        // If this is an l-value to r-value cast, then it's really a load
+        // expression.  Do that, except for direct references to variables,
+        // which we can read directly.
+        if (!isa<DeclRefExpr>(Body) && JSPrimitiveForType(E->getType())) {
+          OS << ".get" << JSPrimitiveForType(E->getType()) << "(0)";
+        }
+        break;
       case CK_FloatingToIntegral:
         // Integers and floating point values in JS are the same, but we should
         // drop the fractional part.
@@ -265,6 +290,8 @@ public:
         llvm::errs() << "Casts to Objective-C object types are not supported.";
         return false;
       case CK_BitCast:
+          TraverseStmt(Body);
+          return true;
         QualType ToTy = E->getType().getUnqualifiedType();
         QualType FromTy = Body->getType().getUnqualifiedType();
         if ((ToTy == FromTy) ||
@@ -290,8 +317,9 @@ public:
             return true;
           }
           if (OldTy->isArithmeticType() && Ty->isArithmeticType()) {
-            OS << "pointerCastTo(";
+            OS << '(';
             TraverseStmt(Body);
+            OS << ").pointerCastTo(";
             OS << ", ";
             OS << (Ty->isIntegerType() ? "true, " : "false, ");
             OS << (Ty->isUnsignedIntegerType() ? "false, " : "true, ");
@@ -322,9 +350,10 @@ public:
   }
   bool TraverseArraySubscriptExpr(ArraySubscriptExpr *E) {
     TraverseStmt(E->getBase());
-    OS << '[';
+    // FIXME: If it's a constant expression, evaluate it here!
+    OS << ".pointerAdd(" << Ctx->getTypeSize(E->getType())/8 << " * ";
     TraverseStmt(E->getIdx());
-    OS << ']';
+    OS << ").dereference()";
     return true;
   }
 
@@ -514,14 +543,52 @@ public:
     return TraverseCompoundAssignOperator(Op);
   }
 
-  bool TraverseMemberExpr(MemberExpr *E) {
+  void WriteMemberExprBase(MemberExpr *E) {
+    // If this is an arrow expression then we need to dereference it by getting
+    // the pointer at address 0 in this memory view.  The getPointer() function
+    // will translate this offset back into the last value written.
+    OS << '(';
     TraverseStmt(E->getBase());
-    // If this is an arrow operation, then it's a pointer in C, so an array in
-    // JavaScript.  We get the first element in the array to get the real
-    // object.
+    OS << ')';
     if (E->isArrow())
-      OS << "[0]";
-    OS << '.' << E->getMemberDecl()->getName();
+      OS << ".dereference()";
+  }
+
+  bool TraverseMemberExpr(MemberExpr *E) {
+    Expr *Base = E->getBase();
+    QualType BaseTy = Base->getType();
+    const RecordType *StructTy = BaseTy->getAsStructureType();
+    if (NULL == StructTy && BaseTy->isPointerType())
+      StructTy = BaseTy->getPointeeType()->getAsStructureType();
+    const ASTRecordLayout &Layout = Ctx->getASTRecordLayout(StructTy->getDecl());
+    // FIXME: Bitfields (yuck!)
+    uint64_t offset =
+      Layout.getFieldOffset(cast<FieldDecl>(E->getMemberDecl())->getFieldIndex()) / 8;
+    QualType Ty = E->getType();
+    // If this is an l-value expression then we just do the pointer arithmetic.
+    if (E->isLValue()) {
+      OS << '(';
+      WriteMemberExprBase(E);
+      OS << ").pointerAdd(" << offset << ')';
+      return true;
+    }
+
+    // If the result is a pointer, then we need to read a pointer from the
+    // buffer's pointer store, which is parallel to its data store.
+    if (Ty->isPointerType()) {
+      OS << "getPointer(";
+      WriteMemberExprBase(E);
+      OS << offset << ')';
+      return true;
+    }
+    WriteMemberExprBase(E);
+    // We now have two cases: A nested structure or a primitive.  If it's a
+    // structure, then we do some pointer arithmetic and return a new view on
+    // this buffer.  If it's a primitive, then we also do a load of that field
+    if (Ty->isArithmeticType()) {
+      OS << ".get" << JSPrimitiveForType(Ty) << '(' << offset << ')';
+      return true;
+    }
     return true;
   }
 
