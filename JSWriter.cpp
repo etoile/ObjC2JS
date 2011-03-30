@@ -566,8 +566,15 @@ public:
     Expr *Base = E->getBase();
     QualType BaseTy = Base->getType();
     const RecordType *StructTy = BaseTy->getAsStructureType();
-    if (NULL == StructTy && BaseTy->isPointerType())
-      StructTy = BaseTy->getPointeeType()->getAsStructureType();
+    if (0 == StructTy) {
+      StructTy = BaseTy->getAsUnionType();
+      if (NULL == StructTy && BaseTy->isPointerType()) {
+        QualType PointeeTy = BaseTy->getPointeeType();
+        StructTy = PointeeTy->getAsStructureType();
+        if (0 == StructTy) 
+          StructTy = BaseTy->getAsUnionType();
+      }
+    }
     const ASTRecordLayout &Layout = Ctx->getASTRecordLayout(StructTy->getDecl());
     // FIXME: Bitfields (yuck!)
     uint64_t offset =

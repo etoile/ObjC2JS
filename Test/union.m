@@ -5,7 +5,7 @@ void jsalert(int);
 -alert;
 @end
 
-struct foo
+union foo
 {
 	int a;
 	id b;
@@ -13,7 +13,7 @@ struct foo
 
 int main(void)
 {
-	struct foo*array = malloc(10*sizeof(struct foo));
+	union foo*array = malloc(10*sizeof(union foo));
 	array[5].a = 12;
 	array[0].b = [NSObject new];
 
