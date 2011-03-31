@@ -19,8 +19,12 @@
 #include "clang/AST/RecordLayout.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "llvm/Support/raw_ostream.h"
+#include "clang/Basic/SourceManager.h"
+#include "clang/Basic/FileManager.h"
+
 
 #include <stdio.h>
+#include <string>
 
 using namespace clang;
 
@@ -32,6 +36,7 @@ class JSWriter : public ASTConsumer,
                  public RecursiveASTVisitor<JSWriter> {
   llvm::raw_fd_ostream OS;
   ASTContext *Ctx;
+  std::string path;
 
 public:
   JSWriter(CompilerInstance &CI, llvm::StringRef InFile) : ASTConsumer(),
@@ -39,6 +44,11 @@ public:
   }
   virtual void HandleTranslationUnit(ASTContext &C) {
     Ctx = &C;
+    SourceManager &SM = Ctx->getSourceManager();
+    const FileEntry *mainFile = SM.getFileEntryForID(SM.getMainFileID());
+    path = std::string(mainFile->getDir()->getName()) + '/' + mainFile->getName();
+    // Emit an object for holding file-static declarations
+    OS << "CStatics[\"" << path << "\"] = new Object();\n";
     TraverseDecl(C.getTranslationUnitDecl());
     Ctx = 0;
   }
@@ -90,7 +100,7 @@ public:
     }
     return 0;
   }
-  void EmitVarDecl(VarDecl *VD) {
+  void EmitVarDecl(VarDecl *VD, bool zeroInitialize=false) {
     QualType Ty = VD->getType();
     OS << VD->getName();
     if (Stmt *init = VD->getInit()) {
@@ -101,16 +111,45 @@ public:
       // that
     } else if (Ty->isStructureType() || Ty->isArrayType()) {
       OS << " = new ArrayBuffer(" << Ctx->getTypeSize(Ty) / 8 << ')';
+    } else if (zeroInitialize) {
+      OS << " = 0";
     }
 
   }
   bool TraverseVarDecl(VarDecl *VD) {
+    // For static globals, we emit fields in the statics object.
+    //
+    // Emit 
+    if (VD->getStorageClass() == SC_Static) {
+      OS << "CStatics[\"" << path << "\"].";
+      EmitVarDecl(VD, true);
+      OS << ";\n";
+      return true;
+    }
+
     OS << "var ";
     EmitVarDecl(VD);
     OS << ";\n";
     return true;
   }
   bool TraverseDeclStmt(DeclStmt *D) {
+    VarDecl *FirstDecl = cast<VarDecl>(*(D->decl_begin()));
+    // static is bound to an entire statement, so if it's on the first decl
+    // then it will be on all of them
+
+    // For static locals, we emit fields on the function object.
+    if (FirstDecl->isStaticLocal()) {
+      for (DeclStmt::decl_iterator i=D->decl_begin(),e=D->decl_end() ; i!=e ; ++i){
+        VarDecl *VD = cast<VarDecl>(*i);
+        OS << "if (this." << VD->getName() << " == undefined)\n{\nthis.";
+        EmitVarDecl(VD, true);
+        OS << ";\n}";
+      }
+      return true;
+    }
+
+    // Everything else is a local or global variable declaration, so normal
+    // JavaScript scoping can be applied.
     OS << "var ";
     for (DeclStmt::decl_iterator i=D->decl_begin(),e=D->decl_end() ; i!=e ; ++i){
       EmitVarDecl(cast<VarDecl>(*i));
@@ -169,7 +208,16 @@ public:
     return true;
   }
   bool VisitDeclRefExpr(DeclRefExpr *E) {
+    Decl *D = E->getDecl();
+    VarDecl *VD = dyn_cast<VarDecl>(D);
+    OS<< '(';
+    if (VD && VD->isStaticLocal()) {
+      OS << "this.";
+    } else if (VD && VD->getStorageClass() == SC_Static) {
+      OS << "CStatics[\"" << path << "\"].";
+    }
     OS << E->getDecl()->getName();
+    OS<< ')';
     return true;
   }
   bool TraverseBinAssign(BinaryOperator *Op) {

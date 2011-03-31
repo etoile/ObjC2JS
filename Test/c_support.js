@@ -1,5 +1,6 @@
 C = new Object();
 OBJC = new Object();
+CStatics = new Object();
 
 function cloneObject(obj)
 {

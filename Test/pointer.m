@@ -8,7 +8,8 @@ void jsalert(int);
 int main(void)
 {
 	int *array = malloc(1024);
-	float *alias = (float*)array;
+	float *alias;
+	alias = (float*)array;
 	alias[2] = 1;
 	array[1] = alias[2];
 	((id*)array)[12] = [NSObject new];
