@@ -221,8 +221,15 @@ public:
     return true;
   }
   bool TraverseBinAssign(BinaryOperator *Op) {
-    if (isa<DeclRefExpr>(Op->getLHS()))
-      return TraverseBinOp(Op);
+    if (isa<DeclRefExpr>(Op->getLHS())) {
+      TraverseStmt(Op->getLHS());
+      OS << '=';
+      Expr *RHS = Op->getRHS();
+      BeginExprResultTruncation(RHS);
+      TraverseStmt(RHS);
+      EndExprResultTruncation(RHS);
+      return true;
+    }
     OS << '(';
     TraverseStmt(Op->getLHS());
     // FIXME: Structure assignments (memcpy call)
@@ -254,20 +261,90 @@ public:
   bool TraverseBinSub(BinaryOperator *Op) { return TraverseBinOp(Op); }
   bool TraverseBinXor(BinaryOperator *Op) { return TraverseBinOp(Op); }
 
+  void BeginExprResultTruncation(Expr *E) {
+    QualType Ty = E->getType();
+    if (Ty->isIntegerType()) {
+      OS << "(";
+    } 
+    if (Ty->isSignedIntegerType()) {
+      OS << "(" << (1LL << (Ctx->getTypeSize(Ty)-1)) << "+(";
+    }
+  }
+  void EndExprResultTruncation(Expr *E) {
+    QualType Ty = E->getType();
+    // For signed overflow, we need to wrap.  For unsigned, the spec is
+    // undefined, but lots of code expects us to wrap, so we'll do that too.
+    // We could maybe turn that off, unless -wrapv is specified.
+    if (Ty->isSignedIntegerType()) {
+      OS << ")) % " << (1LL << Ctx->getTypeSize(Ty));
+      OS << ")-" << (1LL << (Ctx->getTypeSize(Ty)-1));
+    } else if (Ty->isIntegerType()) {
+      OS << ") % " << (1LL << Ctx->getTypeSize(Ty));
+    }
+  }
+
   bool TraverseBinOp(BinaryOperator *Op) {
+    BeginExprResultTruncation(Op);
     TraverseStmt(Op->getLHS());
     OS << Op->getOpcodeStr();
     TraverseStmt(Op->getRHS());
+    EndExprResultTruncation(Op);
     return true;
   }
   bool TraversePrefixOp(UnaryOperator *Op) {
-    OS << Op->getOpcodeStr(Op->getOpcode());
     TraverseStmt(Op->getSubExpr());
+    OS << " = (";
+    BeginExprResultTruncation(Op);
+    switch (Op->getOpcode()) {
+      default:
+        assert(0 && "Not reached!");
+      case UO_PreInc:
+        TraverseStmt(Op->getSubExpr());
+        OS << "+1";
+        break;
+      case UO_PreDec:
+        TraverseStmt(Op->getSubExpr());
+        OS << "-1";
+        break;
+      case UO_Plus:
+        OS << "Math.abs(";
+        TraverseStmt(Op->getSubExpr());
+        OS << ')';
+        break;
+      case UO_Minus:
+        OS << "0-Math.abs(";
+        TraverseStmt(Op->getSubExpr());
+        OS << ')';
+        break;
+      case UO_Not:
+        OS << "~(";
+        TraverseStmt(Op->getSubExpr());
+        OS << ')';
+        break;
+      case UO_LNot:
+        OS << "!(";
+        TraverseStmt(Op->getSubExpr());
+        OS << ')';
+        break;
+    }
+    EndExprResultTruncation(Op);
+    OS << ')';
     return true;
   }
   bool TraversePostfixOp(UnaryOperator *Op) {
+    OS << "(( function() { var $tmp = ";
     TraverseStmt(Op->getSubExpr());
-    OS << Op->getOpcodeStr(Op->getOpcode());
+    OS << ";";
+    TraverseStmt(Op->getSubExpr());
+    OS << '=';
+    BeginExprResultTruncation(Op);
+    TraverseStmt(Op->getSubExpr());
+    if (Op->getOpcode() == UO_PostInc)
+      OS << "+1";
+    else
+      OS << "-1";
+    EndExprResultTruncation(Op);
+    OS << "; return $tmp; })())";
     return true;
   }
   bool TraverseUnaryPostInc(UnaryOperator *Op) { return TraversePostfixOp(Op); }
