@@ -18,7 +18,7 @@ int main(void)
 	jsalert(array[2]);
 	jsalert(array[12]);
 
-	[((id*)array)[12] alert];
+	[((id*)alias)[12] alert];
 
 	return 0;
 }

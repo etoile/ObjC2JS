@@ -417,41 +417,6 @@ public:
       case CK_BitCast:
           TraverseStmt(Body);
           return true;
-        QualType ToTy = E->getType().getUnqualifiedType();
-        QualType FromTy = Body->getType().getUnqualifiedType();
-        if ((ToTy == FromTy) ||
-            (ToTy->isObjCObjectPointerType() &&
-             FromTy->isObjCObjectPointerType())||
-            TypesEquivalent(ToTy, FromTy)) {
-          TraverseStmt(Body);
-          return true;
-        }
-        if (E->getType()->isPointerType() && Body->getType()->isPointerType()) {
-          QualType Ty = E->getType()->getPointeeType();
-          QualType OldTy = Body->getType()->getPointeeType();
-
-          // We can cast int and float pointers to and from void easily
-          if (Ty->isVoidType() && (OldTy->isArithmeticType()
-                                   || OldTy->isVoidType())) {
-            TraverseStmt(Body);
-            return true;
-          }
-          if (OldTy->isVoidType() && (Ty->isArithmeticType()
-                                      || Ty->isVoidType())) {
-            TraverseStmt(Body);
-            return true;
-          }
-          if (OldTy->isArithmeticType() && Ty->isArithmeticType()) {
-            OS << '(';
-            TraverseStmt(Body);
-            OS << ").pointerCastTo(";
-            OS << ", ";
-            OS << (Ty->isIntegerType() ? "true, " : "false, ");
-            OS << (Ty->isUnsignedIntegerType() ? "false, " : "true, ");
-            OS << Ctx->getTypeSize(Ty);
-            OS << ')';
-            return true;
-          }
           E->dump();
           /*
            * Enum stuff:
@@ -459,11 +424,6 @@ public:
           E->Evaluate(Result, CGF.getContext());
           OS << Result.Val.getInt();
           */
-        }
-        else {
-          E->dump();
-          return false;
-        }
     }
     return true;
   }
