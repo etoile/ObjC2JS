@@ -290,6 +290,17 @@ public:
   }
 
   bool TraverseBinOp(BinaryOperator *Op) {
+    if (Op->getType()->isAnyPointerType()) {
+      OS << '(';
+      TraverseStmt(Op->getLHS());
+      int64_t offset = Ctx->getTypeSize(Op->getType()->getPointeeType())/8;
+      if (Op->getOpcode() == BO_Sub)
+        offset = 0-offset;
+      OS << ".pointerAdd(" << offset << " * ";
+      TraverseStmt(Op->getRHS());
+      OS << "))";
+      return true;
+    }
     BeginExprResultTruncation(Op);
     TraverseStmt(Op->getLHS());
     OS << Op->getOpcodeStr();
@@ -372,7 +383,7 @@ public:
     OS << ')';
     return true;
   }
-  bool TraverseUnary(UnaryOperator *Op) {
+  bool TraverseUnaryDeref(UnaryOperator *Op) {
     OS << '(';
     TraverseStmt(Op->getSubExpr());
     OS << ").dereference()";
