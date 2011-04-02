@@ -209,6 +209,12 @@ public:
   }
   bool VisitDeclRefExpr(DeclRefExpr *E) {
     Decl *D = E->getDecl();
+    // For enums, insert the constant value
+    if (EnumConstantDecl *ED = dyn_cast<EnumConstantDecl>(D)) {
+      OS << ED->getInitVal();
+      return true;
+    }
+
     VarDecl *VD = dyn_cast<VarDecl>(D);
     OS<< '(';
     if (VD && VD->isStaticLocal()) {
@@ -415,15 +421,15 @@ public:
         llvm::errs() << "Casts to Objective-C object types are not supported.";
         return false;
       case CK_BitCast:
-          TraverseStmt(Body);
-          return true;
-          E->dump();
-          /*
-           * Enum stuff:
-          Expr::EvalResult Result;
-          E->Evaluate(Result, CGF.getContext());
-          OS << Result.Val.getInt();
-          */
+         TraverseStmt(Body);
+         return true;
+         E->dump();
+         /*
+          * Enum stuff:
+         Expr::EvalResult Result;
+         E->Evaluate(Result, CGF.getContext());
+         OS << Result.Val.getInt();
+         */
     }
     return true;
   }
@@ -722,6 +728,9 @@ public:
     }
     return true;
   }
+  /// Ignore enum constant declarations - we evaluate them as constants in the
+  /// code
+  bool TraverseEnumConstantDecl(EnumConstantDecl *D) { return true; }
 };
 
 class JavaScriptGeneratorAction : public PluginASTAction {
