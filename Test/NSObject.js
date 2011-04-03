@@ -22,4 +22,5 @@ OBJC.NSObject.methods["retain"] = function(self, _cmd) { return self; };
 OBJC.NSObject.methods["init"] = function(self, _cmd) { return self; };
 OBJC.NSObject.methods["self"] = function(self, _cmd) { return self; };
 OBJC.NSObject.methods["release"] = function(self, _cmd) {};
-OBJC.NSObject.methods["alert"] = function(self, _cmd) { alert(self); };
+OBJC.NSObject.methods["description"] = function(self, _cmd) { return makeObjCString(self.isa.name);};
+OBJC.NSObject.methods["alert"] = function(self, _cmd) { alert(objc_msgSend(self, "description")); };

@@ -37,7 +37,7 @@ function objc_msgSendSuper(isClassMsg, cls, object, selector)
 	method.apply(object, arguments);
 }
 
-function objc_initClass(cls, superClass)
+function objc_initClass(cls, superClass, name)
 {
 	cls.template = new Object();
 	cls.template.isa = cls;
@@ -48,10 +48,6 @@ function objc_initClass(cls, superClass)
 	cls.name = name;
 	if (superClass)
 	{
-		//cls.methods.__proto__ = superClass.methods;
-		//var clone = function() {};
-		//clone.prototype = superClass.methods;
-		//cls.methods = new clone();
 		cls.methods = cloneObject(superClass.methods);
 		cls.superclass = superClass;
 	}
