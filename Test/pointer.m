@@ -18,6 +18,8 @@ int main(void)
 	jsalert(array[2]);
 	jsalert(array[12]);
 	jsalert(*((array+13) - 1));
+	int i = 12;
+	jsalert(array[i]);
 
 	[((id*)alias)[12] alert];
 

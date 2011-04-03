@@ -295,11 +295,14 @@ public:
       OS << '(';
       TraverseStmt(Op->getLHS());
       int64_t offset = Ctx->getTypeSize(Op->getType()->getPointeeType())/8;
-      if (Op->getOpcode() == BO_Sub)
-        offset = 0-offset;
-      OS << ".pointerAdd(" << offset << " * ";
-      TraverseStmt(Op->getRHS());
-      OS << "))";
+      if (0 != offset) {
+        if (Op->getOpcode() == BO_Sub)
+          offset = 0-offset;
+        OS << ".pointerAdd(" << offset << " * ";
+        TraverseStmt(Op->getRHS());
+        OS << ')';
+      }
+      OS << ')';
       return true;
     }
     BeginExprResultTruncation(Op);
@@ -453,10 +456,23 @@ public:
   }
   bool TraverseArraySubscriptExpr(ArraySubscriptExpr *E) {
     TraverseStmt(E->getBase());
-    // FIXME: If it's a constant expression, evaluate it here!
-    OS << ".pointerAdd(" << Ctx->getTypeSize(E->getType())/8 << " * ";
-    TraverseStmt(E->getIdx());
-    OS << ").dereference()";
+    Expr *I = E->getIdx();
+    // If it's a constant expression, evaluate it here!
+    if (I->isEvaluatable(*Ctx) && !I->HasSideEffects(*Ctx)) {
+      int64_t offset = ((Ctx->getTypeSize(E->getType())) / 8);
+      offset *= I->EvaluateAsInt(*Ctx).getSExtValue();
+      // If the offset is not 0, do some pointer arithmetic, otherwise this is
+      // a null operation so do nothing.
+      if (offset != 0) {
+        OS << ".pointerAdd(" << offset << ')';
+      }
+    } else { 
+      OS << ".pointerAdd(";
+      OS << Ctx->getTypeSize(E->getType())/8 << " * ";
+      TraverseStmt(I);
+      OS << ')';
+    }
+    OS << ".dereference()";
     return true;
   }
 
