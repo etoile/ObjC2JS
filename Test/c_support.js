@@ -108,8 +108,20 @@ ArrayBuffer.prototype.setFloat64 = function(offset, obj)
 }
 
 
-
-
+ArrayBuffer.prototype.toString = function()
+{
+	switch (this.byteLength)
+	{
+		default:
+			return "[" + this.byteLength + " bytes]";
+		case 1:
+			return "'" + String.fromCharCode(this.getInt8(0)) + "'";
+		case 2:
+			return this.getInt16(0).toString();
+		case 4:
+			return this.getInt16(0).toString();
+	}
+}
 
 
 
@@ -292,6 +304,11 @@ AddressOf.prototype.dereference = function()
 {
 	// This may be another AddressOf object.
 	return this.pointee;
+}
+
+AddressOf.prototype.toString = function()
+{
+	return "&(" + this.pointee + ')';
 }
 
 /**

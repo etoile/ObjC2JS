@@ -101,20 +101,15 @@ public:
     return 0;
   }
   void EmitVarDecl(VarDecl *VD, bool zeroInitialize=false) {
+    // FIXME: We need to create an ArrayBuffer for everything (or do something
+    // more clever with pointers to other objects, but I don't think that's
+    // possible - you can't alias numbers in JS)
     QualType Ty = VD->getType();
     OS << VD->getName();
-    if (Stmt *init = VD->getInit()) {
-      OS << " = ";
-      TraverseStmt(init);
-      // If it's a composite type, we need to create some memory to store it.
-      // If there's an init list then this is done when emitting the code for
-      // that
-    } else if (Ty->isStructureType() || Ty->isArrayType()) {
-      OS << " = new ArrayBuffer(" << Ctx->getTypeSize(Ty) / 8 << ')';
-    } else if (zeroInitialize) {
-      OS << " = 0";
-    }
-
+    OS << " = (function () { var $tmp = new ArrayBuffer("
+       << Ctx->getTypeSize(Ty) / 8 << ");";
+    EmitInitializer(VD->getInit(), Ty, 0);
+    OS << " return $tmp; })()";
   }
   bool TraverseVarDecl(VarDecl *VD) {
     // For static globals, we emit fields in the statics object.
@@ -159,6 +154,29 @@ public:
     return true;
   }
 
+  void EmitInitializer(Expr *Init, QualType FieldTy, uint64_t offset=0) {
+    if (FieldTy->isArithmeticType()) {
+      OS << "$tmp.set" << JSPrimitiveForType(FieldTy) << '(' << offset <<  ", ";
+      if (Init) 
+        TraverseStmt(Init);
+      else 
+        OS << '0';
+      OS << ");";
+    } else if (FieldTy->isAnyPointerType()) {
+      OS << "$tmp.setPointer(" << offset <<  ", ";
+      if (Init) 
+        TraverseStmt(Init);
+      else 
+        OS << '0';
+      OS << ");";
+    } else if (InitListExpr *SubList = dyn_cast<InitListExpr>(Init)) {
+      EmitInitList(SubList, offset);
+    } else {
+      fprintf(stderr, "Don't know how to handle initializer:\n");
+      Init->dump();
+    }
+  }
+
   void EmitInitList(InitListExpr *E, uint64_t baseOffset) {
     const RecordType *RT = cast<RecordType>(cast<ElaboratedType>(E->getType())->getNamedType());
     const RecordDecl *RD = RT->getDecl();
@@ -166,30 +184,15 @@ public:
     Expr **Init = E->getInits();
     // This is almost certainly broken for array initialisers
     for (RecordDecl::field_iterator i=RD->field_begin(),e=RD->field_end()
-        ; i!=e ; ++i) {
+        ; i!=e ; ++i, ++Init) {
       // TODO: Bitfields (yuck!)
       uint64_t offset = baseOffset + Layout.getFieldOffset((*i)->getFieldIndex()) / 8;
-      QualType FieldTy = i->getType();
-      if (FieldTy->isArithmeticType()) {
-        OS << "$tmp.set" << JSPrimitiveForType(FieldTy) << '(' << offset <<  ", ";
-        TraverseStmt(*Init);
-        OS << ");";
-      } else if (FieldTy->isAnyPointerType()) {
-        OS << "$tmp.setPointer(" << offset <<  ", ";
-        TraverseStmt(*Init);
-        OS << ");";
-      } else if (InitListExpr *SubList = dyn_cast<InitListExpr>(*Init)) {
-        EmitInitList(SubList, offset);
-      }
-      Init++;
+      EmitInitializer(*Init, i->getType(), offset);
     }
   }
 
   bool TraverseInitListExpr(InitListExpr *E) {
-    OS << "(function () { var $tmp = new ArrayBuffer("
-       << Ctx->getTypeSize(E->getType()) / 8 << ");";
     EmitInitList(E, 0);
-    OS << " return $tmp; })()";
     return true;
   }
 
@@ -200,6 +203,10 @@ public:
   bool TraverseObjCStringLiteral(ObjCStringLiteral *L) {
     StringLiteral *SL = L->getString();
     OS << "makeObjCString(\"" << SL->getString() << "\")";
+    return true;
+  }
+  bool VisitCharacterLiteral(CharacterLiteral *L) {
+    OS << L->getValue();
     return true;
   }
 
