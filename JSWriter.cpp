@@ -234,21 +234,15 @@ public:
     return true;
   }
   bool TraverseBinAssign(BinaryOperator *Op) {
-    if (isa<DeclRefExpr>(Op->getLHS())) {
-      TraverseStmt(Op->getLHS());
-      OS << '=';
-      Expr *RHS = Op->getRHS();
-      BeginExprResultTruncation(RHS);
-      TraverseStmt(RHS);
-      EndExprResultTruncation(RHS);
-      return true;
-    }
+    Expr *RHS = Op->getRHS();
     OS << '(';
     TraverseStmt(Op->getLHS());
     // FIXME: Structure assignments (memcpy call)
     // Store the value at address 0 in the LHS.
     OS << ").set" << JSPrimitiveForType(Op->getLHS()->getType()) << "(0, ";
-    TraverseStmt(Op->getRHS());
+    BeginExprResultTruncation(RHS);
+    TraverseStmt(RHS);
+    EndExprResultTruncation(RHS);
     OS << ')';
     return true;
   }
@@ -423,7 +417,7 @@ public:
         // If this is an l-value to r-value cast, then it's really a load
         // expression.  Do that, except for direct references to variables,
         // which we can read directly.
-        if (!isa<DeclRefExpr>(Body) && JSPrimitiveForType(E->getType())) {
+        if (JSPrimitiveForType(E->getType())) {
           OS << ".get" << JSPrimitiveForType(E->getType()) << "(0)";
         }
         break;
