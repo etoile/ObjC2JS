@@ -313,9 +313,13 @@ public:
     return true;
   }
   bool TraversePrefixOp(UnaryOperator *Op) {
-    TraverseStmt(Op->getSubExpr());
-    OS << " = (";
-    BeginExprResultTruncation(Op);
+    Expr *subExpr = Op->getSubExpr();
+    OS << '(';
+    TraverseStmt(subExpr);
+    OS << ").set" << JSPrimitiveForType(subExpr->getType()) << "(0, ";
+    BeginExprResultTruncation(subExpr);
+    TraverseStmt(subExpr);
+    OS << ".get" << JSPrimitiveForType(subExpr->getType()) << "(0)";
     switch (Op->getOpcode()) {
       default:
         assert(0 && "Not reached!");
@@ -349,23 +353,24 @@ public:
         break;
     }
     EndExprResultTruncation(Op);
-    OS << ')';
+    OS << "))";
     return true;
   }
   bool TraversePostfixOp(UnaryOperator *Op) {
+    Expr *subExpr = Op->getSubExpr();
     OS << "(( function() { var $tmp = ";
-    TraverseStmt(Op->getSubExpr());
-    OS << ";";
-    TraverseStmt(Op->getSubExpr());
-    OS << '=';
-    BeginExprResultTruncation(Op);
-    TraverseStmt(Op->getSubExpr());
+    TraverseStmt(subExpr);
+    OS << ".get" << JSPrimitiveForType(subExpr->getType()) << "(0);(";
+    TraverseStmt(subExpr);
+    OS << ").set" << JSPrimitiveForType(subExpr->getType()) << "(0, ";
+    BeginExprResultTruncation(subExpr);
     if (Op->getOpcode() == UO_PostInc)
-      OS << "+1";
+      OS << "$tmp+1";
     else
-      OS << "-1";
+      OS << "$tmp-1";
     EndExprResultTruncation(Op);
-    OS << "; return $tmp; })())";
+    OS << ");";
+    OS << " return $tmp; })())";
     return true;
   }
   bool TraverseUnaryPostInc(UnaryOperator *Op) { return TraversePostfixOp(Op); }
@@ -427,7 +432,7 @@ public:
       case CK_FloatingToIntegral:
         // Integers and floating point values in JS are the same, but we should
         // drop the fractional part.
-        OS << "Math.abs(";
+        OS << "Math.floor(";
         TraverseStmt(Body);
         OS << ')';
         break;
@@ -638,9 +643,17 @@ public:
       TraverseStmt(RHS);
       OS << ')';
     } else {
+      OS << '(';
       TraverseStmt(LHS);
-      OS << Op->getOpcodeStr();
+      // Store the value at address 0 in the LHS.
+      OS << ").set" << JSPrimitiveForType(LHS->getType()) << "(0, ";
+      BeginExprResultTruncation(RHS);
+      TraverseStmt(LHS);
+      OS << ".get" << JSPrimitiveForType(LHS->getType()) << "(0)";
+      OS << Op->getOpcodeStr()[0];
       TraverseStmt(RHS);
+      EndExprResultTruncation(RHS);
+      OS << ')';
     }
     return true;
   }

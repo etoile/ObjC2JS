@@ -7,6 +7,17 @@ void jsalert(int);
 
 int main(void)
 {
+	int i = 1;
+	jsalert((int)*(float*)&i);
+	i = i + 1;
+	jsalert(i);
+	i += 1;
+	jsalert(i);
+	jsalert(i++);
+	jsalert(i);
+	char *str = "abc";
+	char *ptr = str++;
+	jsalert(*ptr);
 	int *array = malloc(1024);
 	float *alias;
 	alias = (float*)array;
@@ -18,7 +29,7 @@ int main(void)
 	jsalert(array[2]);
 	jsalert(array[12]);
 	jsalert(*((array+13) - 1));
-	int i = 12;
+	i = 12;
 	jsalert(array[i]);
 
 	[((id*)alias)[12] alert];

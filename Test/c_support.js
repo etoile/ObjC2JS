@@ -316,12 +316,12 @@ AddressOf.prototype.toString = function()
  */
 function makeCString(str)
 {
-	var buffer = ArrayBuffer(str.length);
-	var c_str = Int8Array(buffer);
+	var buffer = new ArrayBuffer(str.length);
+	var c_str = new Int8Array(buffer);
 	c_str.buffer = buffer;
-	for (var i=0 ; i<buffer.length ; i++)
+	for (var i=0 ; i<str.length ; i++)
 	{
-		c_str[i] = str.charCodeAt(i);
+		c_str.buffer.setInt8(i, str.charCodeAt(i));
 	}
 	return c_str;
 }
