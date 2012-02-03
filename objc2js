@@ -1,2 +1,2 @@
 #!/bin/sh
-clang -cc1 -fobjc-nonfragile-abi -load `llvm-config --libdir`/libJSWriter.so -triple i386-unknown-unknown -plugin -emit-js $@
+clang -cc1 -load `llvm-config --libdir`/libJSWriter.so -triple i386-unknown-unknown -plugin -emit-js $@

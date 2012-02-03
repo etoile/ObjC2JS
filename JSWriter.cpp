@@ -431,7 +431,7 @@ public:
         TraverseStmt(Body);
         OS << ')';
         break;
-      case CK_AnyPointerToObjCPointerCast:
+      case CK_CPointerToObjCPointerCast:
           E->dump();
         llvm::errs() << "Casts to Objective-C object types are not supported.";
         return false;
@@ -460,7 +460,9 @@ public:
     // If it's a constant expression, evaluate it here!
     if (I->isEvaluatable(*Ctx) && !I->HasSideEffects(*Ctx)) {
       int64_t offset = ((Ctx->getTypeSize(E->getType())) / 8);
-      offset *= I->EvaluateAsInt(*Ctx).getSExtValue();
+      llvm::APSInt result;
+      I->EvaluateAsInt(result, *Ctx);
+      offset *= result.getSExtValue();
       // If the offset is not 0, do some pointer arithmetic, otherwise this is
       // a null operation so do nothing.
       if (offset != 0) {
@@ -478,9 +480,9 @@ public:
 
   bool TraverseUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr *E) {
     // FIXME: VLA sizes
-    Expr::EvalResult Result;
-    E->Evaluate(Result, *Ctx);
-    OS << Result.Val.getInt();;
+    llvm::APSInt result;
+    E->EvaluateAsInt(result, *Ctx);
+    OS << result.getSExtValue();
     return true;
   }
 
